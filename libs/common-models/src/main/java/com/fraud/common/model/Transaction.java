@@ -1,4 +1,4 @@
-package com.fraud.ingest.model;
+package com.fraud.common.model;
 
 import jakarta.validation.constraints.*;
 import lombok.*;
