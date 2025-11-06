@@ -48,14 +48,11 @@ Total score = sum of triggered rule points (clamped to 100).
 
 ## 🚀 Setup Guide
 
-1️⃣ Clone & Switch Branch
+1️⃣ Clone Repository
 
 ```bash
-git clone https://github.com/your-team/fraud-detection-system.git
+git clone https://github.com/VritikaMalhotra/Fraud_Detection.git
 cd Fraud_Detection
-git fetch origin renuka
-git checkout renuka
-git pull origin renuka
 ```
 
 2️⃣ Environment File
