@@ -34,12 +34,15 @@ High Amount | amount ≥ 1000 | +60 | high_amount
 Invalid Amount | ≤ 0 | +100 | invalid_amount
 Bad Currency | currency missing or invalid | +40 | bad_currency
 Night Time | hour 00 – 05 UTC | +20 | night_time
-Burst | ≥ 3 tx within 60 s | +40 | burst_60s
-New Device | first-time device for user | +20 | new_device
-New IP | first-time IP for user | +15 | new_ip
-Geo-Impossible | Travel speed > 900 km/h since last location | +50 | geo_impossible
+Burst | ≥ 3 tx within 60 s (configurable) | +40 | burst_60s
+**Spend Spike** | **amount ≥ 5× user's median** | **+30** | **spend_spike**
+New Device | first-seen within 7 days (configurable) | +20 | new_device
+New IP | first-seen within 7 days (configurable) | +15 | new_ip
+Geo-Impossible | Travel speed > 900 km/h (configurable) | +50 | geo_impossible
 
 Total score = sum of triggered rule points (clamped to 100).
+
+**🎛️ Configurable Thresholds:** All fraud rules are now configurable via `application.properties` - no code changes needed to adjust sensitivity!
 
 ---
 
@@ -101,6 +104,36 @@ Ingest API
 cd services/ingest-api
 KAFKA_BOOTSTRAP_SERVERS=localhost:9094 mvn spring-boot:run
 ```
+
+---
+
+## ⚙️ Configuring Fraud Rules
+
+All fraud detection thresholds can be tuned in `services/fraud-service/src/main/resources/application.properties`:
+
+```properties
+# Burst detection
+app.rules.burst.windowSec=60      # Time window in seconds
+app.rules.burst.count=3           # Max transactions allowed
+app.rules.burst.score=40          # Score penalty
+
+# Spend spike detection
+app.rules.spend.multiplier=5.0    # Alert if ≥ 5× user's median
+app.rules.spend.score=30
+app.rules.spend.historySize=10    # Track last N transactions
+
+# Device/IP freshness
+app.rules.device.newWithinDays=7  # Treat as "new" for 7 days
+app.rules.device.score=20
+app.rules.ip.newWithinDays=7
+app.rules.ip.score=15
+
+# Geo-impossibility
+app.rules.geo.maxSpeedKmph=900    # Speed threshold
+app.rules.geo.score=50
+```
+
+**To adjust:** Edit values → Restart fraud-service → Changes apply immediately!
 
 ---
 
@@ -202,6 +235,32 @@ curl -X POST http://localhost:8080/transactions \
 Triggers: Geo-impossible (+50).
 Expected: Decision = BLOCK with reason `geo_impossible`.
 
+7. Spend Spike Detection (Blocked)
+
+```bash
+# Build baseline spending pattern
+for amt in 25 30 28 35 32; do
+  curl -s -X POST http://localhost:8080/transactions \
+   -H "Content-Type: application/json" \
+   -d "{\"transactionId\":\"base-$amt\",\"userId\":\"u6\",\"amount\":$amt,
+        \"currency\":\"USD\",\"merchantId\":\"m6\",
+        \"timestamp\":\"2025-11-05T12:00:00Z\",
+        \"device\":{\"id\":\"dev6\",\"ip\":\"203.0.113.15\"}}"
+  sleep 1
+done
+
+# Sudden spike transaction (median ~$30, spike $200 = 6.67×)
+curl -X POST http://localhost:8080/transactions \
+ -H "Content-Type: application/json" \
+ -d '{"transactionId":"spike-1","userId":"u6","amount":200,
+      "currency":"USD","merchantId":"m6",
+      "timestamp":"2025-11-05T14:00:00Z",
+      "device":{"id":"dev6","ip":"203.0.113.15"}}'
+```
+
+Triggers: Spend spike (+30).
+Expected: Decision = BLOCK with reason `spend_spike`.
+
 ---
 
 ## 📊 Viewing Results
@@ -231,6 +290,27 @@ Transaction Type | Triggered Rules | Approx. Score | Decision
 Normal small tx | None | 10 | ALLOW
 Late-night moderate tx | night_time | 35 | REVIEW
 High-value | high_amount | 60 | BLOCK
+**Spending spike** | **spend_spike** | **30 – 60** | **REVIEW / BLOCK**
 Burst activity | burst_60s | 70 | BLOCK
 New device/IP | new_device, new_ip | 50 – 60 | REVIEW / BLOCK
 Geo-impossible | geo_impossible | 90 | BLOCK
+
+---
+
+## 🆕 What's New
+
+**Configurable Fraud Rules:**
+- All thresholds now configurable in `application.properties`
+- No code changes needed to adjust fraud sensitivity
+- Quick iteration: edit config → restart → done!
+
+**Spend Spike Detection:**
+- Tracks user's spending history (last 10 transactions)
+- Calculates median spending pattern
+- Flags transactions ≥ 5× normal spending as suspicious
+- Example: User normally spends $30, suddenly $200 → Flagged!
+
+**Smart Device/IP Trust:**
+- Devices/IPs are "new" only for first 7 days
+- After 7 days, they become "trusted"
+- Reduces false positives for regular users
