@@ -12,6 +12,7 @@
         <module>libs/common-models</module>
         <module>services/ingest-api</module>
         <module>services/fraud-service</module>
+        <module>services/alerts-service</module>
     </modules>
 
     <properties>

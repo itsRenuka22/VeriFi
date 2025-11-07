@@ -2,6 +2,18 @@
 
 Real-time fraud detection system built using Redis and Kafka for high-speed event streaming and in-memory analysis. Deployed on AWS using Docker and Kubernetes for scalability and fault tolerance, enabling instant anomaly detection and automated risk alerts across transactions.
 
+## 🖥️ Analyst Console (React)
+
+A complementary analyst UI lives in `frontend/`. It visualises live KPIs, recent decisions, and alert queues using mocked data.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The dev server runs on [http://localhost:5173](http://localhost:5173). Update `src/services/fraudApi.js` to connect the widgets to real backend endpoints once they are available.
+
 ## ⚙️ Architecture Overview
 
 Component | Description

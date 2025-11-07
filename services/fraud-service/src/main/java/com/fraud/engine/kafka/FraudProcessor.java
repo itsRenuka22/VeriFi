@@ -1,24 +1,45 @@
 package com.fraud.engine.kafka;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fraud.common.model.FraudDecision;
 import com.fraud.common.model.Transaction;
-import com.fraud.engine.db.*;
-import com.fraud.engine.model.Decision;
-import com.fraud.engine.service.RuleEngine;
+import com.fraud.engine.db.DecisionEntity;
+import com.fraud.engine.db.DecisionRepo;
+import com.fraud.engine.db.TransactionEntity;
+import com.fraud.engine.db.TransactionRepo;
 import com.fraud.engine.redis.RedisState;
+import com.fraud.engine.service.RuleEngine;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
 
+@Slf4j
 @RequiredArgsConstructor
 @Component
 public class FraudProcessor {
-  private final KafkaTemplate<String, Decision> decisionTemplate;
-  private final DecisionRepo repo;
+
+  @Qualifier("decisionKafkaTemplate")
+  private final KafkaTemplate<String, FraudDecision> decisionTemplate;
+  private final DecisionRepo decisionRepo;
+  private final TransactionRepo transactionRepo;
   private final RedisState redisState;
+  private final MeterRegistry meterRegistry;
+  private final ObjectMapper objectMapper;
 
   @Value("${app.topics.out}")
   private String outTopic;
@@ -60,14 +81,55 @@ public class FraudProcessor {
   @Value("${app.rules.spend.historySize:10}")
   private int spendHistorySize;
 
+  private Timer decisionLatencyTimer;
+  private Counter allowCounter;
+  private Counter reviewCounter;
+  private Counter blockCounter;
+  private Counter duplicateCounter;
+
+  @PostConstruct
+  void initMetrics() {
+    this.decisionLatencyTimer = Timer.builder("fraud_decision_latency")
+        .description("Time spent evaluating a transaction for fraud")
+        .publishPercentileHistogram()
+        .register(meterRegistry);
+
+    this.allowCounter = Counter.builder("fraud_decisions_total")
+        .description("Total decisions by outcome")
+        .tag("decision", "ALLOW")
+        .register(meterRegistry);
+
+    this.reviewCounter = Counter.builder("fraud_decisions_total")
+        .description("Total decisions by outcome")
+        .tag("decision", "REVIEW")
+        .register(meterRegistry);
+
+    this.blockCounter = Counter.builder("fraud_decisions_total")
+        .description("Total decisions by outcome")
+        .tag("decision", "BLOCK")
+        .register(meterRegistry);
+
+    this.duplicateCounter = Counter.builder("fraud_decision_duplicates_total")
+        .description("Events skipped because a decision already exists")
+        .register(meterRegistry);
+  }
+
+  @Transactional
   @KafkaListener(topics = "${app.topics.in}", groupId = "fraud-service")
   public void onEvent(Transaction tx) {
-    long t0 = System.currentTimeMillis();
-    if (repo.existsById(tx.getTransactionId()))
+    if (decisionRepo.existsById(tx.getTransactionId())) {
+      duplicateCounter.increment();
+      log.debug("Duplicate transaction {} skipped", tx.getTransactionId());
       return;
+    }
+
+    Timer.Sample sample = Timer.start(meterRegistry);
+    long t0 = System.currentTimeMillis();
+
+    transactionRepo.save(toEntity(tx));
 
     var res = RuleEngine.evaluate(tx);
-    var reasons = new java.util.ArrayList<>(res.reasons()); // editable
+    List<String> reasons = new ArrayList<>(res.reasons());
     double score = res.score();
 
     // ---- Redis-based checks (Level 4: Configurable & Enhanced) ----
@@ -123,15 +185,15 @@ public class FraudProcessor {
           tx.getUserId(), tx.getLocation().getLat(), tx.getLocation().getLon(), nowSec);
     }
 
-    // Final decision
-    String decisionStr = RuleEngine.toDecision(Math.min(score, 100));
+    double boundedScore = Math.min(score, 100);
+    String decisionStr = RuleEngine.toDecision(boundedScore);
 
     long latency = System.currentTimeMillis() - t0;
-    var decision = Decision.builder()
+    FraudDecision decision = FraudDecision.builder()
         .transactionId(tx.getTransactionId())
         .userId(tx.getUserId())
         .decision(decisionStr)
-        .score(Math.min(score, 100))
+        .score(boundedScore)
         .reasons(reasons)
         .latencyMs(latency)
         .evaluatedAt(Instant.now())
@@ -139,16 +201,67 @@ public class FraudProcessor {
 
     decisionTemplate.send(outTopic, tx.getUserId(), decision);
 
-    var csv = new java.util.StringJoiner("|");
-    reasons.forEach(csv::add);
-    repo.save(DecisionEntity.builder()
+    decisionRepo.save(DecisionEntity.builder()
         .transactionId(tx.getTransactionId())
         .userId(tx.getUserId())
         .decision(decisionStr)
-        .score(Math.min(score, 100))
-        .reasonsCsv(csv.toString())
+        .score(boundedScore)
+        .reasons(reasons)
         .latencyMs(latency)
         .evaluatedAt(decision.getEvaluatedAt())
         .build());
+
+    switch (decisionStr) {
+      case "ALLOW" -> allowCounter.increment();
+      case "REVIEW" -> reviewCounter.increment();
+      case "BLOCK" -> blockCounter.increment();
+      default -> log.warn("Unknown decision {} for transaction {}", decisionStr, tx.getTransactionId());
+    }
+
+    sample.stop(decisionLatencyTimer);
+  }
+
+  private TransactionEntity toEntity(Transaction tx) {
+    return TransactionEntity.builder()
+        .transactionId(tx.getTransactionId())
+        .userId(tx.getUserId())
+        .amount(tx.getAmount())
+        .currency(tx.getCurrency())
+        .merchantId(tx.getMerchantId())
+        .occurredAt(parseInstant(tx.getTimestamp()))
+        .deviceId(tx.getDevice() != null ? tx.getDevice().getId() : null)
+        .deviceIp(tx.getDevice() != null ? tx.getDevice().getIp() : null)
+        .deviceUserAgent(tx.getDevice() != null ? tx.getDevice().getUserAgent() : null)
+        .latitude(tx.getLocation() != null ? tx.getLocation().getLat() : null)
+        .longitude(tx.getLocation() != null ? tx.getLocation().getLon() : null)
+        .city(tx.getLocation() != null ? tx.getLocation().getCity() : null)
+        .country(tx.getLocation() != null ? tx.getLocation().getCountry() : null)
+        .rawPayload(writeJson(tx))
+        .build();
+  }
+
+  private Instant parseInstant(String timestamp) {
+    if (timestamp == null || timestamp.isBlank()) {
+      return null;
+    }
+    try {
+      return Instant.parse(timestamp);
+    } catch (DateTimeParseException ex) {
+      log.debug("Unable to parse timestamp '{}' for transaction", timestamp, ex);
+      try {
+        return Instant.from(java.time.ZonedDateTime.parse(timestamp));
+      } catch (Exception ignored) {
+        return null;
+      }
+    }
+  }
+
+  private String writeJson(Transaction tx) {
+    try {
+      return objectMapper.writeValueAsString(tx);
+    } catch (JsonProcessingException e) {
+      log.warn("Failed to serialise transaction {} for audit", tx.getTransactionId(), e);
+      return null;
+    }
   }
 }

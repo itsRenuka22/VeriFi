@@ -1,6 +1,6 @@
 package com.fraud.engine.config;
 
-import com.fraud.engine.model.Decision;
+import com.fraud.common.model.FraudDecision;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,7 +21,7 @@ public class KafkaConfig {
   private String bootstrap;
 
   @Bean
-  public ProducerFactory<String, Decision> decisionProducerFactory() {
+  public ProducerFactory<String, FraudDecision> decisionProducerFactory() {
     Map<String, Object> props = new HashMap<>();
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
@@ -31,7 +31,7 @@ public class KafkaConfig {
   }
 
   @Bean(name = "decisionKafkaTemplate")
-  public KafkaTemplate<String, Decision> decisionKafkaTemplate() {
+  public KafkaTemplate<String, FraudDecision> decisionKafkaTemplate() {
     return new KafkaTemplate<>(decisionProducerFactory());
   }
 }

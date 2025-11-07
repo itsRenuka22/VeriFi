@@ -14,8 +14,9 @@ public class DecisionEntity {
   private String decision;
   private double score;
 
-  @Column(length=1024)
-  private String reasonsCsv;
+  @Convert(converter = com.fraud.engine.db.converter.StringListJsonConverter.class)
+  @Column(name = "reasons_json", columnDefinition = "TEXT")
+  private java.util.List<String> reasons;
 
   private long latencyMs;
   private Instant evaluatedAt;
