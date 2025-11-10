@@ -25,7 +25,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "PBFA97CFB590B2093"
       },
       "fieldConfig": {
         "defaults": {
@@ -72,7 +72,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "sum(fraud_decisions_total{decision=\"ALLOW\"})",
@@ -87,7 +87,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "PBFA97CFB590B2093"
       },
       "fieldConfig": {
         "defaults": {
@@ -134,7 +134,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "sum(fraud_decisions_total{decision=\"REVIEW\"})",
@@ -149,7 +149,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "PBFA97CFB590B2093"
       },
       "fieldConfig": {
         "defaults": {
@@ -196,7 +196,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "sum(fraud_decisions_total{decision=\"BLOCK\"})",
@@ -211,7 +211,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "PBFA97CFB590B2093"
       },
       "fieldConfig": {
         "defaults": {
@@ -258,7 +258,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "sum(fraud_decision_duplicates_total)",
@@ -273,7 +273,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "PBFA97CFB590B2093"
       },
       "fieldConfig": {
         "defaults": {
@@ -393,7 +393,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "rate(fraud_decisions_total{decision=\"ALLOW\"}[1m]) * 60",
@@ -404,7 +404,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "rate(fraud_decisions_total{decision=\"REVIEW\"}[1m]) * 60",
@@ -415,7 +415,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "rate(fraud_decisions_total{decision=\"BLOCK\"}[1m]) * 60",
@@ -430,7 +430,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "PBFA97CFB590B2093"
       },
       "fieldConfig": {
         "defaults": {
@@ -518,7 +518,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "fraud_decisions_total{decision=\"ALLOW\"}",
@@ -529,7 +529,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "fraud_decisions_total{decision=\"REVIEW\"}",
@@ -540,7 +540,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "fraud_decisions_total{decision=\"BLOCK\"}",
@@ -555,7 +555,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "PBFA97CFB590B2093"
       },
       "fieldConfig": {
         "defaults": {
@@ -629,7 +629,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.50, sum(rate(fraud_decision_latency_seconds_bucket[1m])) by (le)) * 1000",
@@ -640,7 +640,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.95, sum(rate(fraud_decision_latency_seconds_bucket[1m])) by (le)) * 1000",
@@ -651,7 +651,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.99, sum(rate(fraud_decision_latency_seconds_bucket[1m])) by (le)) * 1000",
@@ -666,7 +666,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "PBFA97CFB590B2093"
       },
       "fieldConfig": {
         "defaults": {
@@ -740,7 +740,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "rate(alerts_sent_total{channel=\"slack\"}[1m]) * 60",
@@ -751,7 +751,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "rate(alert_deduplication_total[1m]) * 60",
@@ -766,7 +766,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "PBFA97CFB590B2093"
       },
       "fieldConfig": {
         "defaults": {
@@ -840,7 +840,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "sum(kafka_consumergroup_lag{topic=\"payments.events\"})",
@@ -851,7 +851,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
           "expr": "sum(kafka_consumergroup_lag{topic=\"fraud.decisions\"})",
