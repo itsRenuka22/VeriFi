@@ -1,0 +1,590 @@
+openapi: 3.0.3
+info:
+  title: Fraud Detection System API
+  description: |
+    Complete API contract for the fraud detection system backend services.
+
+    ## Services Overview
+    - **Ingest API** (port 8080): Accepts transaction submissions
+    - **Fraud Service** (port 8082): Provides fraud decision queries
+    - **Alerts Service** (port 8083): Kafka consumer - no REST endpoints
+
+  version: 1.0.0
+  contact:
+    name: Fraud Detection Team
+
+servers:
+  - url: http://localhost:8080
+    description: Ingest API - Transaction ingestion service
+  - url: http://localhost:8082
+    description: Fraud Service - Decision query service
+
+tags:
+  - name: Transactions
+    description: Transaction ingestion endpoints
+  - name: Decisions
+    description: Fraud decision query endpoints
+
+paths:
+  # ========== INGEST API (port 8080) ==========
+  /transactions:
+    post:
+      tags:
+        - Transactions
+      summary: Submit a transaction for fraud detection
+      description: |
+        Accepts a transaction and publishes it to Kafka for fraud evaluation.
+
+        Features:
+        - Auto-generates transactionId if not provided
+        - Deduplication using Redis (48-hour TTL)
+        - Returns 409 for duplicate transactions
+        - Returns 202 for successfully accepted transactions
+      operationId: ingestTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transaction'
+            examples:
+              basicTransaction:
+                summary: Basic transaction
+                value:
+                  userId: "alice"
+                  amount: 150.00
+                  currency: "USD"
+                  merchantId: "merchant-123"
+                  timestamp: "2025-11-11T14:30:00Z"
+              fullTransaction:
+                summary: Transaction with location and device
+                value:
+                  userId: "bob"
+                  transactionId: "tx-custom-001"
+                  amount: 2500.50
+                  currency: "USD"
+                  merchantId: "merchant-456"
+                  timestamp: "2025-11-11T15:45:00Z"
+                  location:
+                    lat: 37.7749
+                    lon: -122.4194
+                    city: "San Francisco"
+                    country: "USA"
+                  device:
+                    id: "device-789"
+                    ip: "192.168.1.100"
+                    userAgent: "Mozilla/5.0..."
+      responses:
+        '202':
+          description: Transaction accepted for processing
+          headers:
+            X-Transaction-Id:
+              description: The assigned transaction ID
+              schema:
+                type: string
+              example: "tx-12345-abcde"
+        '400':
+          description: Invalid transaction data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Validation failed"
+                message: "userId is required"
+        '409':
+          description: Duplicate transaction ID
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  transactionId:
+                    type: string
+              example:
+                error: "Duplicate transactionId"
+                transactionId: "tx-12345-abcde"
+
+  # ========== FRAUD SERVICE (port 8082) ==========
+  /api/decisions/{transactionId}:
+    get:
+      tags:
+        - Decisions
+      summary: Get fraud decision by transaction ID
+      description: Retrieves a single fraud decision using the transaction ID
+      operationId: getDecisionByTransactionId
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          description: The unique transaction identifier
+          schema:
+            type: string
+          example: "tx-12345-abcde"
+      responses:
+        '200':
+          description: Decision found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decision'
+              example:
+                transactionId: "tx-12345-abcde"
+                userId: "alice"
+                decision: "ALLOW"
+                score: 0.15
+                reasons:
+                  - "Low amount"
+                  - "Verified user"
+                latencyMs: 42
+                evaluatedAt: "2025-11-11T14:30:05Z"
+        '404':
+          description: Decision not found
+
+  /api/decisions:
+    get:
+      tags:
+        - Decisions
+      summary: Query decisions with filters
+      description: |
+        Query fraud decisions with optional filters and pagination.
+
+        Filters are applied in this order of priority:
+        1. userId (if provided)
+        2. decision type (if provided)
+        3. date range (if both startDate and endDate provided)
+        4. All decisions (if no filters)
+
+        Results are sorted by evaluatedAt descending (newest first).
+      operationId: queryDecisions
+      parameters:
+        - name: userId
+          in: query
+          description: Filter by user ID
+          schema:
+            type: string
+          example: "charlie"
+        - name: decision
+          in: query
+          description: Filter by decision type (ALLOW, REVIEW, BLOCK)
+          schema:
+            type: string
+            enum: [ALLOW, REVIEW, BLOCK]
+          example: "REVIEW"
+        - name: startDate
+          in: query
+          description: Start of date range (ISO-8601 format)
+          schema:
+            type: string
+            format: date-time
+          example: "2025-11-01T00:00:00Z"
+        - name: endDate
+          in: query
+          description: End of date range (ISO-8601 format)
+          schema:
+            type: string
+            format: date-time
+          example: "2025-11-10T23:59:59Z"
+        - name: page
+          in: query
+          description: Page number (zero-indexed)
+          schema:
+            type: integer
+            default: 0
+          example: 0
+        - name: size
+          in: query
+          description: Number of results per page
+          schema:
+            type: integer
+            default: 20
+          example: 20
+      responses:
+        '200':
+          description: Paginated list of decisions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedDecisions'
+              example:
+                content:
+                  - transactionId: "tx-001"
+                    userId: "charlie"
+                    decision: "ALLOW"
+                    score: 0.12
+                    reasons: ["Low risk"]
+                    latencyMs: 35
+                    evaluatedAt: "2025-11-11T10:00:00Z"
+                  - transactionId: "tx-002"
+                    userId: "charlie"
+                    decision: "REVIEW"
+                    score: 0.68
+                    reasons: ["High amount"]
+                    latencyMs: 48
+                    evaluatedAt: "2025-11-10T15:30:00Z"
+                pageable:
+                  pageNumber: 0
+                  pageSize: 20
+                  sort:
+                    sorted: true
+                    unsorted: false
+                    empty: false
+                  offset: 0
+                  paged: true
+                  unpaged: false
+                totalElements: 7
+                totalPages: 1
+                last: true
+                size: 20
+                number: 0
+                sort:
+                  sorted: true
+                  unsorted: false
+                  empty: false
+                numberOfElements: 7
+                first: true
+                empty: false
+
+  /api/decisions/user/{userId}/range:
+    get:
+      tags:
+        - Decisions
+      summary: Get decisions for a user within date range
+      description: Returns all fraud decisions for a specific user within the specified date range
+      operationId: getDecisionsByUserAndDateRange
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: The user ID to filter by
+          schema:
+            type: string
+          example: "charlie"
+        - name: startDate
+          in: query
+          required: true
+          description: Start of date range (ISO-8601 format)
+          schema:
+            type: string
+            format: date-time
+          example: "2025-11-01T00:00:00Z"
+        - name: endDate
+          in: query
+          required: true
+          description: End of date range (ISO-8601 format)
+          schema:
+            type: string
+            format: date-time
+          example: "2025-11-10T23:59:59Z"
+      responses:
+        '200':
+          description: List of decisions for the user
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Decision'
+              example:
+                - transactionId: "tx-456"
+                  userId: "charlie"
+                  decision: "REVIEW"
+                  score: 0.65
+                  reasons: ["Unusual location"]
+                  latencyMs: 38
+                  evaluatedAt: "2025-11-08T10:15:00Z"
+                - transactionId: "tx-123"
+                  userId: "charlie"
+                  decision: "ALLOW"
+                  score: 0.12
+                  reasons: ["Low risk"]
+                  latencyMs: 42
+                  evaluatedAt: "2025-11-05T14:30:00Z"
+
+  /api/decisions/high-risk:
+    get:
+      tags:
+        - Decisions
+      summary: Get high-risk decisions
+      description: Returns paginated list of REVIEW or BLOCK decisions, sorted by most recent
+      operationId: getHighRiskDecisions
+      parameters:
+        - name: page
+          in: query
+          description: Page number (zero-indexed)
+          schema:
+            type: integer
+            default: 0
+          example: 0
+        - name: size
+          in: query
+          description: Number of results per page
+          schema:
+            type: integer
+            default: 50
+          example: 50
+      responses:
+        '200':
+          description: Paginated list of high-risk decisions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedDecisions'
+              example:
+                content:
+                  - transactionId: "tx-999"
+                    userId: "bob"
+                    decision: "BLOCK"
+                    score: 0.95
+                    reasons: ["Blacklisted country", "High velocity"]
+                    latencyMs: 52
+                    evaluatedAt: "2025-11-11T16:00:00Z"
+                  - transactionId: "tx-888"
+                    userId: "alice"
+                    decision: "REVIEW"
+                    score: 0.72
+                    reasons: ["Unusual merchant"]
+                    latencyMs: 45
+                    evaluatedAt: "2025-11-11T14:22:00Z"
+                totalElements: 14
+                totalPages: 1
+                size: 50
+                number: 0
+
+  /api/decisions/user/{userId}/stats:
+    get:
+      tags:
+        - Decisions
+      summary: Get statistics for a user
+      description: Returns aggregated statistics for a specific user's fraud decisions
+      operationId: getUserStats
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: The user ID to get statistics for
+          schema:
+            type: string
+          example: "charlie"
+      responses:
+        '200':
+          description: User statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId:
+                    type: string
+                  totalDecisions:
+                    type: integer
+                    format: int64
+              example:
+                userId: "charlie"
+                totalDecisions: 7
+
+  /api/decisions/health:
+    get:
+      tags:
+        - Decisions
+      summary: Health check endpoint
+      description: Returns service health status and total number of decisions in database
+      operationId: getDecisionsHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  totalDecisions:
+                    type: string
+              example:
+                status: "UP"
+                totalDecisions: "33"
+
+components:
+  schemas:
+    Transaction:
+      type: object
+      required:
+        - userId
+        - amount
+        - currency
+        - merchantId
+        - timestamp
+      properties:
+        userId:
+          type: string
+          description: User identifier
+          example: "alice"
+        transactionId:
+          type: string
+          description: Transaction ID (auto-generated if not provided)
+          example: "tx-12345-abcde"
+        amount:
+          type: number
+          format: double
+          description: Transaction amount (must be positive)
+          minimum: 0.01
+          example: 150.00
+        currency:
+          type: string
+          description: Currency code
+          example: "USD"
+        merchantId:
+          type: string
+          description: Merchant identifier
+          example: "merchant-123"
+        timestamp:
+          type: string
+          format: date-time
+          description: Transaction timestamp (ISO-8601 format)
+          example: "2025-11-11T14:30:00Z"
+        location:
+          $ref: '#/components/schemas/Location'
+        device:
+          $ref: '#/components/schemas/Device'
+
+    Location:
+      type: object
+      properties:
+        lat:
+          type: number
+          format: double
+          description: Latitude
+          example: 37.7749
+        lon:
+          type: number
+          format: double
+          description: Longitude
+          example: -122.4194
+        city:
+          type: string
+          description: City name
+          example: "San Francisco"
+        country:
+          type: string
+          description: Country name
+          example: "USA"
+
+    Device:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Device identifier
+          example: "device-789"
+        ip:
+          type: string
+          description: IP address
+          example: "192.168.1.100"
+        userAgent:
+          type: string
+          description: Browser user agent string
+          example: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)..."
+
+    Decision:
+      type: object
+      properties:
+        transactionId:
+          type: string
+          description: Transaction identifier
+          example: "tx-12345-abcde"
+        userId:
+          type: string
+          description: User identifier
+          example: "alice"
+        decision:
+          type: string
+          enum: [ALLOW, REVIEW, BLOCK]
+          description: Fraud decision outcome
+          example: "ALLOW"
+        score:
+          type: number
+          format: double
+          description: Fraud risk score (0.0 to 1.0)
+          minimum: 0.0
+          maximum: 1.0
+          example: 0.15
+        reasons:
+          type: array
+          items:
+            type: string
+          description: List of reasons for the decision
+          example: ["Low amount", "Verified user"]
+        latencyMs:
+          type: integer
+          format: int64
+          description: Evaluation latency in milliseconds
+          example: 42
+        evaluatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when decision was made
+          example: "2025-11-11T14:30:05Z"
+
+    PagedDecisions:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/Decision'
+        pageable:
+          type: object
+          properties:
+            pageNumber:
+              type: integer
+            pageSize:
+              type: integer
+            sort:
+              type: object
+            offset:
+              type: integer
+            paged:
+              type: boolean
+            unpaged:
+              type: boolean
+        totalElements:
+          type: integer
+          format: int64
+          description: Total number of results across all pages
+        totalPages:
+          type: integer
+          description: Total number of pages
+        last:
+          type: boolean
+          description: Whether this is the last page
+        size:
+          type: integer
+          description: Page size
+        number:
+          type: integer
+          description: Current page number (zero-indexed)
+        sort:
+          type: object
+        numberOfElements:
+          type: integer
+          description: Number of elements in current page
+        first:
+          type: boolean
+          description: Whether this is the first page
+        empty:
+          type: boolean
+          description: Whether the page is empty
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error type
+        message:
+          type: string
+          description: Error message
