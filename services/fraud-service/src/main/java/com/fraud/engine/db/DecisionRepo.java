@@ -39,4 +39,11 @@ public interface DecisionRepo extends JpaRepository<DecisionEntity, String> {
 
     // Count decisions by userId
     long countByUserId(String userId);
+
+    long countByDecision(String decision);
+
+    DecisionEntity findFirstByOrderByEvaluatedAtDesc();
+
+    @Query("SELECT COALESCE(AVG(d.latencyMs),0) FROM DecisionEntity d WHERE d.decision = :decision")
+    Double averageLatencyForDecision(@Param("decision") String decision);
 }
