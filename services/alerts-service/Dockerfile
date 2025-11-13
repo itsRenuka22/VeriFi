@@ -17,8 +17,10 @@ COPY services/alerts-service/pom.xml ./services/alerts-service/
 COPY services/alerts-service/src ./services/alerts-service/src
 
 # Build the application
-RUN mvn clean install -pl libs/common-models -DskipTests
-RUN mvn package spring-boot:repackage -pl services/alerts-service -DskipTests
+# First install parent POM, then common-models, then build alerts-service
+RUN mvn install -N -DskipTests
+RUN mvn install -pl libs/common-models -DskipTests
+RUN mvn package -pl services/alerts-service -DskipTests
 
 # Runtime stage
 FROM eclipse-temurin:21-jre-alpine

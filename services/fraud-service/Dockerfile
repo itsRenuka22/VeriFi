@@ -17,8 +17,10 @@ COPY services/alerts-service/pom.xml ./services/alerts-service/
 COPY services/fraud-service/src ./services/fraud-service/src
 
 # Build the application
-RUN mvn clean install -pl libs/common-models -DskipTests
-RUN mvn package spring-boot:repackage -pl services/fraud-service -DskipTests
+# First install parent POM, then common-models, then build fraud-service
+RUN mvn install -N -DskipTests
+RUN mvn install -pl libs/common-models -DskipTests
+RUN mvn package -pl services/fraud-service -DskipTests
 
 # Runtime stage
 FROM eclipse-temurin:21-jre-alpine
