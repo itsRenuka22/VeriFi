@@ -5,6 +5,7 @@ Serves XGBoost model predictions via REST API
 import os
 import pickle
 import json
+import joblib
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import logging
@@ -30,9 +31,19 @@ def load_model():
         meta_path = os.path.abspath(META_PATH) if not os.path.isabs(META_PATH) else META_PATH
         
         logger.info(f"Loading model from {model_path}")
-        with open(model_path, 'rb') as f:
-            model = pickle.load(f)
-        logger.info("Model loaded successfully")
+        # Try joblib first (preferred for scikit-learn models), then pickle
+        try:
+            model = joblib.load(model_path)
+            logger.info("Model loaded successfully using joblib")
+        except Exception as joblib_error:
+            logger.warning(f"joblib load failed: {joblib_error}, trying pickle...")
+            try:
+                with open(model_path, 'rb') as f:
+                    model = pickle.load(f)
+                logger.info("Model loaded successfully using pickle")
+            except Exception as pickle_error:
+                logger.error(f"Both joblib and pickle failed. Joblib: {joblib_error}, Pickle: {pickle_error}")
+                raise
         
         logger.info(f"Loading metadata from {meta_path}")
         with open(meta_path, 'r') as f:
@@ -68,21 +79,40 @@ def predict():
         
         # Convert to numpy array and predict
         import numpy as np
-        feature_array = np.array([features], dtype=float)
+        import pandas as pd
         
-        # Get prediction probabilities
-        probabilities = model.predict_proba(feature_array)[0]
+        # Convert features to proper format
+        # Try pandas DataFrame first (many scikit-learn pipelines expect this)
+        try:
+            feature_df = pd.DataFrame([features], columns=model_meta['features'])
+            # Get prediction probabilities
+            probabilities = model.predict_proba(feature_df)
+            # Handle both 2D array (single row) and 1D array
+            if len(probabilities.shape) > 1:
+                probabilities = probabilities[0]
+            
+            # Get prediction class
+            prediction = model.predict(feature_df)
+            if hasattr(prediction, '__len__') and len(prediction) > 0:
+                prediction = prediction[0]
+        except Exception as e:
+            # Fallback to numpy array
+            logger.debug(f"DataFrame prediction failed: {e}, trying NumPy array...")
+            feature_array = np.array([features], dtype=float)
+            probabilities = model.predict_proba(feature_array)
+            if len(probabilities.shape) > 1:
+                probabilities = probabilities[0]
+            prediction = model.predict(feature_array)
+            if hasattr(prediction, '__len__') and len(prediction) > 0:
+                prediction = prediction[0]
         
         # For binary classification: [not_fraud_prob, fraud_prob]
         # For multi-class: [ALLOW_prob, REVIEW_prob, BLOCK_prob]
         if len(probabilities) == 2:
-            fraud_probability = probabilities[1]
+            fraud_probability = float(probabilities[1])
         else:
             # Multi-class: fraud = REVIEW + BLOCK
-            fraud_probability = probabilities[1] + probabilities[2] if len(probabilities) > 2 else probabilities[1]
-        
-        # Get prediction class
-        prediction = model.predict(feature_array)[0]
+            fraud_probability = float(probabilities[1] + probabilities[2]) if len(probabilities) > 2 else float(probabilities[1])
         
         return jsonify({
             'fraud_probability': float(fraud_probability),
