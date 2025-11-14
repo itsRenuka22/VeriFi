@@ -30,14 +30,15 @@ public class TransactionFeatures {
     private int ruleGeoImpossible; // 0 or 1
     private int ruleOddHour;    // 0 or 1
     private double ruleScore;
-    private int currency;      // Numeric encoding
-    
+    private String currency;    // Currency code (USD, EUR, etc)
+
     /**
      * Convert to array for ML model input
      * Order must match model_meta.json features array exactly
+     * Returns Object[] because currency is a String
      */
-    public double[] toArray() {
-        return new double[]{
+    public Object[] toArray() {
+        return new Object[]{
             amount,
             hourOfDay,
             txCount60s,

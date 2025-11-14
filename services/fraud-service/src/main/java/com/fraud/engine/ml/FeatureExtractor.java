@@ -109,10 +109,10 @@ public class FeatureExtractor {
         
         // 14. rule_score - rule-based score (0-100)
         double ruleScoreValue = ruleScore;
-        
-        // 15. currency - numeric encoding
-        int currency = CURRENCY_MAP.getOrDefault(tx.getCurrency(), 0);
-        
+
+        // 15. currency - pass as string (ML model expects categorical string)
+        String currency = tx.getCurrency() != null ? tx.getCurrency() : "USD";
+
         return TransactionFeatures.builder()
             .amount(amount)
             .hourOfDay(hour)

@@ -70,21 +70,27 @@ def predict():
     try:
         data = request.get_json()
         features = data.get('features', [])
-        
+
+        logger.info(f"Received features: {features}")
+        logger.info(f"Feature types: {[type(f) for f in features]}")
+
         if len(features) != len(model_meta['features']):
             return jsonify({
                 'error': f'Expected {len(model_meta["features"])} features, got {len(features)}',
                 'expected_features': model_meta['features']
             }), 400
-        
+
         # Convert to numpy array and predict
         import numpy as np
         import pandas as pd
-        
+
         # Convert features to proper format
         # Try pandas DataFrame first (many scikit-learn pipelines expect this)
         try:
+            logger.info(f"Creating DataFrame with columns: {model_meta['features']}")
             feature_df = pd.DataFrame([features], columns=model_meta['features'])
+            logger.info(f"DataFrame created: {feature_df}")
+            logger.info(f"DataFrame dtypes: {feature_df.dtypes}")
             # Get prediction probabilities
             probabilities = model.predict_proba(feature_df)
             # Handle both 2D array (single row) and 1D array
