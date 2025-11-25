@@ -1,0 +1,21 @@
+.wrapper {
+  position: relative;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.header h3 {
+  font-size: 1.1rem;
+}
+
+.header p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+

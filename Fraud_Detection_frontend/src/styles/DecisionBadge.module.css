@@ -1,0 +1,28 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 80px;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.allow {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.review {
+  background: rgba(249, 115, 22, 0.18);
+  color: #f97316;
+}
+
+.block {
+  background: rgba(239, 68, 68, 0.18);
+  color: #ef4444;
+}
+
