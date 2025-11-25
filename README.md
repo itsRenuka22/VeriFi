@@ -53,7 +53,7 @@ Rule | Condition | Score Impact | Reason Tag
 High Amount | amount ≥ 1000 | +60 | high_amount
 Invalid Amount | ≤ 0 | +100 | invalid_amount
 Bad Currency | currency missing or invalid | +40 | bad_currency
-Night Time | hour 00 – 05 UTC | +20 | night_time
+Night Time | hour 00 – 05 UTC | +40 | night_time
 Burst | ≥ 3 tx within 60 s (configurable) | +40 | burst_60s
 **Spend Spike** | **amount ≥ 5× user's median** | **+30** | **spend_spike**
 New Device | first-seen within 7 days (configurable) | +20 | new_device
